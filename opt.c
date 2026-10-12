@@ -18,6 +18,8 @@ typedef struct {
     int n_letters;
     bool leading[26];
     long long coef[26];
+    int n_cols;                 /* max word length */
+    int col_end[MAX_LEN];       /* index in letter[] after which column c is fully assigned */
 } Rebus;
 
 static void parse(const char *s, Rebus *r) {
@@ -44,6 +46,25 @@ static void parse(const char *s, Rebus *r) {
             if (*p == '\0') break;
         }
     }
+    /* letters ordered by column, starting from the units column */
+    int maxlen = 0;
+    for (int i = 0; i < r->n_words; i++) {
+        int L = (int)strlen(r->words[i]);
+        if (L > maxlen) maxlen = L;
+    }
+    r->n_cols = maxlen;
+    bool placed[26] = {false};
+    int cnt = 0;
+    for (int c = 0; c < maxlen; c++) {
+        for (int i = 0; i < r->n_words; i++) {
+            int L = (int)strlen(r->words[i]);
+            if (c < L) {
+                int ch = r->words[i][L - 1 - c] - 'A';
+                if (!placed[ch]) { placed[ch] = true; r->letter[cnt++] = (char)('A' + ch); }
+            }
+        }
+        r->col_end[c] = cnt;
+    }
     for (int i = 0; i < r->n_words; i++) {
         long long w = 1;
         int L = (int)strlen(r->words[i]);
@@ -52,17 +73,25 @@ static void parse(const char *s, Rebus *r) {
     }
 }
 
-bool check(const Rebus* r, const int* digit) {
-    long long sum = 0;
-    for (int i = 0; i < r->n_letters; i++) {
-        int c = r->letter[i] - 'A';
-        sum += r->coef[c] * digit[c];
+static int col_carry[MAX_LEN + 1];
+
+/* checks column c, given the carry from column c-1 */
+static bool column_ok(const Rebus* r, int c) {
+    int sum = col_carry[c];
+    for (int i = 0; i < r->n_words - 1; i++) {
+        int L = (int)strlen(r->words[i]);
+        if (c < L) sum += digit[r->words[i][L - 1 - c] - 'A'];
     }
-    return sum == 0;
+    const char* res = r->words[r->n_words - 1];
+    int L = (int)strlen(res);
+    int need = (c < L) ? digit[res[L - 1 - c] - 'A'] : 0;
+    if (sum % 10 != need) return false;
+    col_carry[c + 1] = sum / 10;
+    return true;
 }
 
-static bool permute(const Rebus* r, int pos) {
-    if (pos == r->n_letters) return check(r, digit);
+static bool permute(const Rebus* r, int pos, int col) {
+    if (pos == r->n_letters) return col == r->n_cols && col_carry[r->n_cols] == 0;
 
     for (int d = 0; d <= 9; d++) {
         if (used[d]) continue;
@@ -71,11 +100,17 @@ static bool permute(const Rebus* r, int pos) {
         used[d] = true;
         digit[r->letter[pos] - 'A'] = d;
 
-        if (permute(r, pos+1)) return true;
-
+        /* check every column that became complete (a column may add no new letters) */
+        int c = col;
+        bool ok = true;
+        while (c < r->n_cols && pos + 1 == r->col_end[c]) {
+            if (!column_ok(r, c)) { ok = false; break; }
+            c++;
+        }
+        if (ok && permute(r, pos + 1, c)) return true;
         used[d] = false;
     }
-    return false; 
+    return false;
 }
 
 bool solve(const char* rebus, char* out, size_t out_size) {
@@ -88,7 +123,8 @@ bool solve(const char* rebus, char* out, size_t out_size) {
     memset(digit, 0, sizeof digit);
     memset(used, 0, sizeof used);
 
-    if (!permute(&r, 0)) return false;
+    col_carry[0] = 0;
+    if (!permute(&r, 0, 0)) return false;
 
     size_t i = 0;
     for (const char* p = rebus; *p != '\0' && i + 1 < out_size; p++) {
