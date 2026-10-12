@@ -17,6 +17,7 @@ typedef struct {
     char letter[10];
     int n_letters;
     bool leading[26];
+    long long coef[26];
 } Rebus;
 
 static void parse(const char *s, Rebus *r) {
@@ -25,6 +26,7 @@ static void parse(const char *s, Rebus *r) {
     r->n_words = 0;
     r->n_letters = 0;
     memset(r->leading, 0, sizeof r->leading);
+    memset(r->coef, 0, sizeof r->coef);
     for (const char *p = s; ; p++) {
         if (*p >= 'A' && *p <= 'Z') {
             r->words[r->n_words][len++] = *p;
@@ -42,30 +44,21 @@ static void parse(const char *s, Rebus *r) {
             if (*p == '\0') break;
         }
     }
-}
-
-unsigned long long word_to_num(const char* w, const int* digit) {
-    unsigned long long num = 0;
-    for (; *w != '\0'; w++) {
-        num = num * 10 + digit[*w - 'A'];
+    for (int i = 0; i < r->n_words; i++) {
+        long long w = 1;
+        int L = (int)strlen(r->words[i]);
+        for (int j = L - 1; j >= 0; j--, w *= 10)
+            r->coef[r->words[i][j] - 'A'] += (i == r->n_words - 1) ? -w : w;
     }
-    return num;
 }
 
 bool check(const Rebus* r, const int* digit) {
-    for (int i = 0; i < r->n_words; i++) {
-        char first = r->words[i][0];
-        if (digit[first - 'A'] == 0) return false;
+    long long sum = 0;
+    for (int i = 0; i < r->n_letters; i++) {
+        int c = r->letter[i] - 'A';
+        sum += r->coef[c] * digit[c];
     }
-
-    unsigned long long sum = 0;
-    for (int i = 0; i < r->n_words - 1; i++)
-        sum += word_to_num(r->words[i], digit);
-
-    unsigned long long result = word_to_num(r->words[r->n_words - 1], digit);
-
-    return sum == result;
-
+    return sum == 0;
 }
 
 static bool permute(const Rebus* r, int pos) {
