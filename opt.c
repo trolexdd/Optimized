@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <locale.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define MAX_WORDS 8
 #define MAX_LEN 32
@@ -87,7 +89,7 @@ bool solve(const char* rebus, char* out, size_t out_size) {
     parse(rebus, &r); 
 
     memset(digit, 0, sizeof digit);
-    memset(digit, 0, sizeof used);
+    memset(used, 0, sizeof used);
 
     if (!permute(&r, 0)) return false;
 
@@ -118,17 +120,27 @@ int main(int argc, char** argv) {
 
     FILE* f = fopen(path, "r");
     if (!f) { perror("fopen"); return 1; }
-
-    char line[256], answer[256];
-    while (fgets(line, sizeof line, f)) {
-        line[strcspn(line, "\r\n")] = '\0';
-        if (line[0] == '\0') continue;
-
-        if (solve(line, answer, sizeof answer))
-            printf("%s\n", answer);
-        else
-            printf("%s -> no solution\n", line);
+    
+    static char lines[100][256];
+    int n = 0;
+    while (n < 100 && fgets(lines[n], sizeof lines[n], f)) {
+        lines[n][strcspn(lines[n], "\r\n")] = '\0';
+        if (lines[n][0] != '\0') n++;
     }
     fclose(f);
+
+    int repeats = 20; 
+    char answer[256];
+    double total = 0;
+    for (int i = 0; i < n; i++) {
+        bool ok = false;
+        clock_t t0 = clock();
+        for (int k = 0; k < repeats; k++)
+            ok = solve(lines[i], answer, sizeof answer);
+        double ms = 1000.0 * (clock() - t0) / CLOCKS_PER_SEC / repeats;
+        total += ms;
+        printf("%-45s %8.2f ms  %s\n", lines[i], ms, ok ? answer : "no solution");
+    }
+    printf("TOTAL: %.2f ms\n", total);
     return 0;
 }
