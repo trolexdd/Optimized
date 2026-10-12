@@ -16,13 +16,15 @@ typedef struct {
     int n_words;
     char letter[10];
     int n_letters;
+    bool leading[26];
 } Rebus;
 
 static void parse(const char *s, Rebus *r) {
     bool seen[26] = {false};
     int len = 0;
     r->n_words = 0;
-    r->n_letters =0;
+    r->n_letters = 0;
+    memset(r->leading, 0, sizeof r->leading);
     for (const char *p = s; ; p++) {
         if (*p >= 'A' && *p <= 'Z') {
             r->words[r->n_words][len++] = *p;
@@ -33,6 +35,7 @@ static void parse(const char *s, Rebus *r) {
         } else if (*p == '+' || *p == '=' || *p == '\0') {
             if (len > 0) {
                 r->words[r->n_words][len] = '\0';
+                r->leading[r->words[r->n_words][0] - 'A'] = true;
                 r->n_words++;
                 len = 0;
             }
@@ -69,7 +72,8 @@ static bool permute(const Rebus* r, int pos) {
     if (pos == r->n_letters) return check(r, digit);
 
     for (int d = 0; d <= 9; d++) {
-        if (used[d]) continue; 
+        if (used[d]) continue;
+        if (d == 0 && r->leading[r->letter[pos] - 'A']) continue;
 
         used[d] = true;
         digit[r->letter[pos] - 'A'] = d;
