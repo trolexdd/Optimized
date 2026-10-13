@@ -18,6 +18,8 @@ typedef struct {
     int n_letters;
     bool leading[26];
     long long coef[26];
+    char ops[MAX_WORDS];        /* ops[i] - operator between words i and i+1 (left side) */
+    bool all_plus;              /* only '+' -> fast column-wise search */
     int n_cols;                 /* max word length */
     int col_end[MAX_LEN];       /* index in letter[] after which column c is fully assigned */
 } Rebus;
@@ -29,6 +31,8 @@ static void parse(const char *s, Rebus *r) {
     r->n_letters = 0;
     memset(r->leading, 0, sizeof r->leading);
     memset(r->coef, 0, sizeof r->coef);
+    r->all_plus = true;
+    bool after_eq = false;
     for (const char *p = s; ; p++) {
         if (*p >= 'A' && *p <= 'Z') {
             r->words[r->n_words][len++] = *p;
@@ -36,12 +40,17 @@ static void parse(const char *s, Rebus *r) {
                 seen[*p - 'A'] = true;
                 r->letter[r->n_letters++] = *p;
             }
-        } else if (*p == '+' || *p == '=' || *p == '\0') {
+        } else if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '=' || *p == '\0') {
             if (len > 0) {
                 r->words[r->n_words][len] = '\0';
                 r->leading[r->words[r->n_words][0] - 'A'] = true;
                 r->n_words++;
                 len = 0;
+            }
+            if (*p == '=') after_eq = true;
+            else if (*p != '\0' && !after_eq && r->n_words > 0) {
+                r->ops[r->n_words - 1] = *p;
+                if (*p != '+') r->all_plus = false;
             }
             if (*p == '\0') break;
         }
@@ -113,6 +122,52 @@ static bool permute(const Rebus* r, int pos, int col) {
     return false;
 }
 
+/* ---- general case: + - * / (usual precedence, division must be exact) ---- */
+static bool word_value(const char* w, long long* out) {
+    long long v = 0;
+    for (; *w; w++) v = v * 10 + digit[*w - 'A'];
+    *out = v;
+    return true;
+}
+
+static bool check_general(const Rebus* r) {
+    int n = r->n_words - 1;                  /* operands on the left side */
+    long long total = 0, term;
+    char sign = '+';
+    word_value(r->words[0], &term);
+    for (int i = 1; i < n; i++) {
+        long long v;
+        word_value(r->words[i], &v);
+        char op = r->ops[i - 1];
+        if (op == '*') term *= v;
+        else if (op == '/') {
+            if (v == 0 || term % v != 0) return false;
+            term /= v;
+        } else {                               /* + or -: finish the current term */
+            total += (sign == '+') ? term : -term;
+            sign = op;
+            term = v;
+        }
+    }
+    total += (sign == '+') ? term : -term;
+    long long res;
+    word_value(r->words[n], &res);
+    return total == res;
+}
+
+static bool permute_general(const Rebus* r, int pos) {
+    if (pos == r->n_letters) return check_general(r);
+    for (int d = 0; d <= 9; d++) {
+        if (used[d]) continue;
+        if (d == 0 && r->leading[r->letter[pos] - 'A']) continue;
+        used[d] = true;
+        digit[r->letter[pos] - 'A'] = d;
+        if (permute_general(r, pos + 1)) return true;
+        used[d] = false;
+    }
+    return false;
+}
+
 bool solve(const char* rebus, char* out, size_t out_size) {
     memset(digit, 0, sizeof digit);
     memset(used, 0, sizeof used);
@@ -124,7 +179,8 @@ bool solve(const char* rebus, char* out, size_t out_size) {
     memset(used, 0, sizeof used);
 
     col_carry[0] = 0;
-    if (!permute(&r, 0, 0)) return false;
+    bool found = r.all_plus ? permute(&r, 0, 0) : permute_general(&r, 0);
+    if (!found) return false;
 
     size_t i = 0;
     for (const char* p = rebus; *p != '\0' && i + 1 < out_size; p++) {
