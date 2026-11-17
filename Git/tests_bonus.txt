@@ -1,0 +1,9 @@
+SEND + MORE = MONEY
+AB * C = DEF
+A * BC = DEF
+AB - C = D
+ABC / D = EF
+AB + C * D = EFG
+TWO * TWO = FOUR
+HE * HE = SHE
+AB - CD = E

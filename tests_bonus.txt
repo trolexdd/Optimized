@@ -4,6 +4,6 @@ A * BC = DEF
 AB - C = D
 ABC / D = EF
 AB + C * D = EFG
-TWO * TWO = FOUR
+AB * CD = EFG
 HE * HE = SHE
 AB - CD = E
